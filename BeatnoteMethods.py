@@ -7,28 +7,127 @@ Created on Wed Jan 10 13:55:22 2024
 """
 import matplotlib.pyplot as plt
 import os
-
 import numpy as np
-from matplotlib.ticker import (MultipleLocator,AutoMinorLocator, FormatStrFormatter, ScalarFormatter)
-import matplotlib.cm as cm
-from scipy import signal
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-from numba import njit
-import numba
-import pandas as pd
 from scipy.optimize import curve_fit
 from scipy import signal
 import scipy.odr as odr
 from scipy import stats
 from scipy import signal
-from scipy.signal import correlate
-
-import tools as tools
 from itertools import zip_longest
 
-        
-def spectrum(xdata, ydata, vmin=0, vmax=10, crop=None, save=False, target_dir = 'output/'):
+import tools as tools
+import fitting as fit
+
+'''
+BEATNOTE METHODS
+
+Mid-level functions called on by BeatnotePipeline
+'''
+
+
+def process_dict(dictionary):
+    '''
+    Function: Classifies data in dictionary
+    Input:
+        dictionary = raw data dictionary from loaded data
+    Output:
+        data = dictionary of data for all .csv files
+    '''
     
+    filenames = dictionary.keys()
+    print(filenames)
+    
+    data = {}
+    
+    for f in filenames:
+        load = dictionary[f]
+        print(load.keys())
+        frequency = load['Frequency']
+        cutoff = int(len(frequency)/2)
+        frequency = np.array([float(f) for f in frequency])[:cutoff]
+        
+        crop = [0, len(load) - 1]
+
+        signal_list = []
+        for i in range(crop[1]-crop[0]):
+            signal = load[str(i)]
+                
+            signal_array = np.array([float(s) for s in signal])[:cutoff]
+            signal_list.append(signal_array)
+                
+
+
+        data[f] = [frequency, signal_list]
+                              
+    return data
+
+def correct_background(dictionary, data_filename, background_filename):
+    '''
+    Function: Removes the average background from the data
+    Input:
+        dictionary = data files
+        data_filename = string of data file to correct
+        background_filename = string of bacground file for correction
+    Output:
+        data_corr = background corrected data
+    '''
+    filenames = dictionary.keys()
+    print(filenames)
+    
+    bg_avg = 0
+
+    background = []
+
+    bg = dictionary[str(background_filename)]
+    bgfrequency = bg[0]
+    cutoff = int(len(bgfrequency)/2)
+    bgfrequency = np.array([float(f) for f in bgfrequency])[:cutoff]
+    background.append(bgfrequency)
+    bgsignal_list = []
+    for i in range(len(bg[1]) - 1):
+        bgsignal = bg[1][i]
+        bgsignal_array = np.array([float(s) for s in bgsignal])[:cutoff]
+        bgsignal_list.append(bgsignal_array)
+    background.append(bgsignal_list)
+    
+    bg_avg = tools.background_avg(background)
+    
+    load = dictionary[data_filename]
+    frequency = load[0]
+    cutoff = int(len(frequency)/2)
+    frequency = np.array([float(f) for f in frequency])[:cutoff]
+    
+    crop = [0, len(load) - 1]
+
+    signal_list = []
+    signal_corr_list = []
+    for i in range(crop[1]-crop[0]):
+        signal = load[1][i]
+            
+        signal_array = np.array([float(s) for s in signal])[:cutoff]
+        signal_list.append(signal_array)
+        
+        signal_corr = signal_array  - np.array(bg_avg)
+        signal_corr_list.append(signal_corr)
+            
+    data_corr = [frequency, signal_corr_list]
+        
+    return data_corr
+
+def spectrum(xdata, ydata, vmin, vmax, crop, save, target_dir):
+    '''
+    Function: Plots 3D spectrum of data
+    Input:
+        xdata = list of frames
+        ydata = list of frequencies
+        vmin = lowest intensity spectrum value
+        vmax = highest intensity spectrum value
+        crop = [,]/None to crop frequency range
+        save = True/False
+        target_dir = output directory for saving plot
+    Output:
+        plot of spectrum
+    '''
     fig, ax = plt.subplots(figsize = (15,9))
 
     ax.tick_params(which = 'major', labelsize = 18, direction = 'in', length = 15, width = 1, bottom = True, top = True, left = True, right = True)
@@ -67,48 +166,20 @@ def spectrum(xdata, ydata, vmin=0, vmax=10, crop=None, save=False, target_dir = 
     else:
         plt.show()
 
-def odr_lorentzian_lineshape(params, x):
-    a, x0, gam, offset = params
-    return a * gam**2 / ( gam**2 + ( x - x0 )**2) + offset
-
-def odr_auto_lorentz(xdata, ydata, x0):
-    
-    print(x0)
-    print(len(xdata))
-    print(xdata[x0])
-    offset_guess = min(ydata)
-    a_guess = max(ydata)
-    x0_guess = xdata[x0]
-    gamma_guess = np.std(ydata)
-    gamma_guess = 0.05 *10**6
-    pguess = [a_guess, x0_guess, gamma_guess, offset_guess]
-
-    
-    param_mask = np.ones(len(pguess))
-    param_mask[1] = 0
-    # param_mask[2] = 0
-    
-    popt, pcov = tools.odrfit(odr_lorentzian_lineshape, xdata, ydata, initials = pguess, param_mask = param_mask)
-    print('Guess = ',pguess)
-    print('Optimsed Parameters = ',popt)
-    
-    output = popt
-
-    return output
-
-def odr_lorentz_func(params, x):
-    y = np.zeros_like(x)
-    for i in range(0, len(params), 4):
-        a = params[i]
-        x0 = params[i+1]
-        gam = params[i+2]
-        offset = params[i+3]
-        y = y + a * gam**2 / ( gam**2 + ( x - x0 )**2) + offset
-    return y
-
 def multi_lorentz_fit(x, data, maxima, minima, minfit, plot):
-
-    local = get_local_indices(maxima, len(data))
+    '''
+    Function: Fits each identified peak in signal with a lorentzian within local domain
+    Input:
+        x = list of frequencies
+        data = list of intensities
+        maxima = list of peak frequency position
+        minima = list of peak minima frequency position
+        minfit = True/False to include minima
+        plot = True/False, set to False to speed up function
+    Output:
+        amplitudes, frequencies, widths, fit = fit parameters for combined function of all peaks
+    '''
+    local = fit.get_local_indices(maxima, len(data))
 
     amplitudes = [[] for _ in range(len(maxima))]
     frequencies = [[] for _ in range(len(maxima))]
@@ -123,7 +194,7 @@ def multi_lorentz_fit(x, data, maxima, minima, minfit, plot):
         # print(local[i])
         print('Domain to fit: ',min(local[i]),max(local[i]))
         
-        output = odr_auto_lorentz(x[min(local[i]):max(local[i])], data[min(local[i]):max(local[i])], maxima[i]-min(local[i]))
+        output = fit.odr_auto_lorentz(x[min(local[i]):max(local[i])], data[min(local[i]):max(local[i])], maxima[i]-min(local[i]))
         print('OUTPUT',output)
         a, x0, gam, off = output
 
@@ -135,7 +206,7 @@ def multi_lorentz_fit(x, data, maxima, minima, minfit, plot):
 
     
     if minfit is True:
-        local2 = get_local_indices(minima, len(data))
+        local2 = fit.get_local_indices(minima, len(data))
         
         for j in range(len(minima)):
             print('Fitting ',j+1,'out of ', len(minima),'peaks')
@@ -154,21 +225,40 @@ def multi_lorentz_fit(x, data, maxima, minima, minfit, plot):
     for k in range(int(len(guess)/4)-1):
         param_mask[1 + 4*k] = 0
     
-    popt, pcov = tools.odrfit(odr_func, x, data, initials = guess, param_mask = param_mask)
-    fit = odr_lorentz_func(popt, x)
+    popt, pcov = fit.odrfit(odr_func, x, data, initials = guess, param_mask = param_mask)
+    lorentzfit = fit.odr_lorentz_func(popt, x)
 
     # popt, pcov = curve_fit(func, x, data, p0=guess)
     # fit = func(x, *popt)
     if plot is True:
         x = [x/10**6 for x in x]
-        tools.xy_plot([[x, data]], fit = [fit], label_variable = None, aspect = 0.5, yerror = None, x_label = 'Frequency (MHz)', y_label = 'Intensity (dB)', title = 'Frame-by-frame Multi-Lorentzian Fit', box = False, save = True, target_dir = 'output/')
+        tools.xy_plot([[x, data]], fit = [lorentzfit], label_variable = None, aspect = 0.5, yerror = None, x_label = 'Frequency (MHz)', y_label = 'Intensity (dB)', title = 'Frame-by-frame Multi-Lorentzian Fit', box = False, save = True, target_dir = 'output/')
 
     print('Fit parameters [a, x0, gam, off]: ',popt)
     
     
-    return amplitudes, frequencies, widths, fit
+    return amplitudes, frequencies, widths, lorentzfit
 
 def cycle_fit(x, y, n_avg, n_frames, minfit, threshold, width, height, distance, prominence, target_dir, plot=False):
+    '''
+    Function: Fits beatnotes in each frame with a multi-lorentzian function
+    Input:
+        x = list of frequencies
+        y = list of intensities
+        n_avg = moving average, determines length of averaging window
+        minfit = True/False to include fitting of minima
+        threshold = minimum peak value
+        width = minimum peak width
+        height = minimum peak height
+        distance = minimum distance between neighbouring peaks
+        prominence = peak prominence, set to None
+        target_dir = output directory for saving data/plots
+        plot = True/False, set to False to speed up function
+    Output:
+        amplitudes, frequencies, widths, fits = fit parameters
+        saves fit parameters in binary .npy file
+    '''
+    
     fits = []
     frequencies = []
     amplitudes = []
@@ -201,14 +291,14 @@ def cycle_fit(x, y, n_avg, n_frames, minfit, threshold, width, height, distance,
 
         if len(maxima) == 0:
             nanlist = [[np.nan]]*maximals[0]
-            amplitude, frequency, wid, fit = nanlist, nanlist, nanlist, nanlist
+            amplitude, frequency, wid, lorentzfit = nanlist, nanlist, nanlist, nanlist
             maxima = [np.nan] * len(amplitudes)
-            fits.append(fit)
+            fits.append(lorentzfit)
 
             
         else:
-            amplitude, frequency, wid, fit = multi_lorentz_fit(x_ma, data, maxima, minima, minfit, plot=plot)
-            fits.append(fit)
+            amplitude, frequency, wid, lorentzfit = multi_lorentz_fit(x_ma, data, maxima, minima, minfit, plot=plot)
+            fits.append(lorentzfit)
             
         
         
@@ -236,45 +326,6 @@ def cycle_fit(x, y, n_avg, n_frames, minfit, threshold, width, height, distance,
     np.save(target_dir+str(n_frames)+"_fit_parameters.npy", np.array([frames, amplitudes, frequencies, widths, fits], dtype = object))
     
     return amplitudes, frequencies, widths, fits  
-
-def get_local_indices(peak_indices, domain):
-    chunks = []
-    
-    for i in range(len(peak_indices)):
-        
-        peak_index = peak_indices[i]
-        if i>0 and i<len(peak_indices)-1:
-            distance = min(abs(peak_index-peak_indices[i+1]),abs(peak_indices[i-1]-peak_index))
-        elif i==0:
-            distance = abs(peak_index-peak_indices[i+1])
-        else:
-            distance = abs(peak_indices[i-1]-peak_index)
-    
-        if peak_index-int(distance/2) <=0:
-            min_index = peak_index-int(distance/4)
-            max_index = peak_index+int(distance/2)
-        else:
-            min_index = peak_index-int(distance/4)
-            max_index = peak_index+int(distance/4)
-        
-        if min_index >= 0 and max_index <= domain:
-            indices = np.arange(min_index,max_index)
-            chunks.append(indices)
-        elif min_index < 0 and max_index <= domain:
-            min_dif = abs(min_index)
-            indices = np.arange(min_index+min_dif,max_index)
-            chunks.append(indices)
-        elif min_index>=0 and max_index > domain:
-            max_dif = abs(domain-max_index)
-            indices = np.arange(min_index,max_index-max_dif)
-            chunks.append(indices)            
-        else:
-            min_dif = abs(min_index)
-            max_dif = abs(domain-max_index)
-            indices = np.arange(min_index+min_dif,max_index-max_dif)
-            chunks.append(indices)    
-    
-    return chunks
 
 def filter_outliers(data, sigma):
     '''
@@ -307,6 +358,17 @@ def filter_outliers(data, sigma):
     return data_filtered
 
 def select_higher_beatnotes(x, frequencies, beatnote_index, sigma, target_dir):
+    '''
+    Function: Selects frequency shifts above a certain number of standard deviations
+    Input:
+        x = list of times
+        frequencies = list of frequencies
+        beatnote_index = None/i, which beatnote to analyse
+        sigma = threshold number of standard deviations
+    Output:
+        selected_beats = filtered beatnote frequency shifts
+        selected_times = corresponding times
+    '''
     beat_deriv = [np.gradient(f, 1) for f in frequencies]
     print(len(beat_deriv))
 
@@ -339,60 +401,3 @@ def select_higher_beatnotes(x, frequencies, beatnote_index, sigma, target_dir):
         tools.xy_plot([selected_times[beatnote_index-1], [selected_beats[beatnote_index-1]]], type='beat_timeline', label_variable = ['Beatnote '+str(beatnote_index)], aspect = 0.33, yerror = None, x_label = 'Frame', y_label = r'$\Delta \nu$ (MHz)', title = r'Frequency change $\Delta \nu$', box = False, save = True, target_dir = target_dir)
 
         return selected_times[beatnote_index-1], selected_beats[beatnote_index-1]
-
-'''CLASSIFY'''
-def combine_fit_parameters(target_dir):
-    frame_list = []
-    filenames = mac_natsorted(os.listdir(target_dir))
-    filenames = [f for f in filenames if '._' not in f]
-    
-    for f in filenames:
-        if '_fit_parameters' in f:
-            print('Available files to combine: ',f)
-            frame = f.strip('_fit_parameters.npy')
-            frame = frame.replace('[', '').replace(']', '')
-            fl = frame.split(', ')
-            frame_list.append([int(fl[0]), int(fl[1])])
-            
-    tempfiles= []
-    
-    frame_no = 0
-    for i, n_frame in enumerate(frame_list):
-        tf = np.load(target_dir+str(n_frame)+'_fit_parameters.npy', allow_pickle=True)
-        
-        frame_no = frame_list[i][1] - frame_list[i][0]
-        
-        a, f, w, fr = tf
-        frame_indeces = np.arange(frame_list[i][0], frame_list[i][1]).tolist()
-        tf = frame_indeces, a, f, w, fr
-        
-        print(n_frame)
-        
-        if i == 0:
-            tempfiles = tf
-        else:
-            frame_indeces = np.arange(frame_list[i][0], frame_list[i][1]).tolist()
-            tempfiles[0].extend(frame_indeces)
-            for j in range(1,len(tf)):
-
-                if j >= len(tf)-1:
-                    tempfiles[j].append([np.nan] * (len(tempfiles[0])))
-                   
-                for k in range(len(tf[j])):
-                    
-                    if k+1 > len(tempfiles[j]):                         
-                        tempfiles[j].append(tf[j][k])
-                            
-                    if j >= len(tf)-1:
-                        tempfiles[j].append(tf[j][k])
-    
-                    else:
-                        tempfiles[j][k] += tf[j][k]
-    
-    xframes, amplitudes, frequencies, widths, fits = tempfiles    
-    amplitudes = [list(tpl) for tpl in zip(*zip_longest(*amplitudes, fillvalue = np.nan))]
-    frequencies = [list(tpl) for tpl in zip(*zip_longest(*frequencies, fillvalue = np.nan))]
-    widths = [list(tpl) for tpl in zip(*zip_longest(*widths, fillvalue = np.nan))]
-    fits = [list(tpl) for tpl in zip(*zip_longest(*fits, fillvalue = np.nan))]
-    np.save(target_dir+"fit_parameters.npy", np.array([xframes, amplitudes, frequencies, widths, fits], dtype=object)) 
-
