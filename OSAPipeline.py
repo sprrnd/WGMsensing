@@ -22,85 +22,97 @@ import tools as tools
 import classifier as classify
 import fitting as fit
 
+import OSAMethods as osam
+
 class OSAPipeline():
     
     def __init__(self, directory, folder, target_dir):
+        '''
+        Function: Initiates class by defining input and output directories
+        Input:
+            directory =  general folder where data is stored ('data/)
+            folder = specific folder to load data from, usually date ('2024-')
+            target_dir = output folder to save files, ('output/'+date)
+        '''
         self.directory = directory
         self.folder = folder
         self.target_dir = target_dir
         
     def load_data(self, mac = False):
+        '''
+        Function: Loads all data in folder
+        Input:
+            mac = True/False
+        Output:
+            data_dictionary = stores all data under associated filenames
+        '''
         self.data_dictionary = osam.load_OSA_data(self.directory+self.folder, self.target_dir, mac = mac)
 
         return self.data_dictionary
         
     def plot_spectrum(self, filename):
+        '''
+        Function: Plots OSA spectrum
+        Input:
+            filename = specific dataset in data_dictionary to plot
+        Output:
+            spectrum plot
+        '''
         dataset = self.data_dictionary[str(filename)]
         
         x = dataset[0]
         y = dataset[1]
-        #plt.plot(x, y)
-        #plt.xlabel('Wavelength (nm)')
-        #plt.ylabel('Intensity (a.u.)')
         title = 'OSA Plot {}'.format(str(filename))
-        #plt.title(title)
-        #plt.show()
-        
+
         tools.xy_plot([dataset], fit = None, label_variable = None, aspect = 0.5, yerror = None, x_label = 'Wavelength (nm)', y_label = 'Intensity (a.u.)', title = title, box = False, save = False, target_dir = self.target_dir)
 
     
     def find_peak_spacing(self, osax, osay, filename, window_size, width=None, height=None, distance=None, save=False):
-        
-        osay = np.array(osay)
-        osayc = osay - min(osay)
-        osayc = osay
-
-        plt.plot(osax, osayc)
-        plt.show()
-
-        lambdas = []
-        intensities = []
-
-        nwindow = int(len(osax)/window_size)
-        for n in range(0, nwindow):
-            xmin = n * window_size
-            xmax = (n+1) * window_size
-
-            maxima, minima = tools.peak_finder(osax[xmin:xmax], osayc[xmin:xmax], minfit=False,
-                                               threshold=None, width=width, height=height, distance=distance, prominence=None, plot=True)
-
-            lambdas.extend([osax[xmin:xmax][m] for m in maxima])
-            intensities.extend([osayc[xmin:xmax][m]+min(osay) for m in maxima])
-            # plt.scatter(lambdas, intensities)
-
-        print(len(lambdas), ' peak maxima found at t = ', lambdas)
-        for j, s in enumerate(lambdas):
-            if j == 0:
-                plt.plot((s, s), (min(osay), intensities[j]), 'tab:blue', zorder=2, label='lasing peaks')
+        '''
+        Function: Find position and spacing of lasing modes in spectrum 
+        Input:
+            osax = x values of spectrum (wavelength in nm)
+            osay = y values of spectrum (intensity)
+            window_size = defines domain over which to search for peaks
+            width, height, distance = peak finding parameters
+            filename = name of data file, used for saving data under relevant title
+            save = True/False
+            target_dir = output folder
+        Output:
+            lambdas = wavelengths of identified peaks
+            intensities = heights of identified peaks
+            delta_lambdas = wavelength spacing between neighbouring peaks
+        '''
+        osayc = []
+        for yvalues in osay:
+            if yvalues < -100:
+                osayc.append(-100)
             else:
-                plt.plot((s, s), (min(osay), intensities[j]), 'tab:blue', zorder=2)
-        plt.plot(osax, osay, linewidth=0.5, alpha=0.5,
-                 color='lightgrey', label='spectrum')
-        plt.xlabel('Wavelength (nm)')
-        plt.ylabel('Intensity (a.u.)')
-        plt.ylim(min(osay, 0))
-        plt.legend()
-        title = 'OSA Plot Sidebands {}'.format(str(filename))
-        plt.title(title)
-        plt.savefig(self.target_dir+str(title)+"_plot.png",
-                    bbox_inches='tight', pad_inches=0.0, format='png', dpi=1200)
-        plt.show()
+                osayc.append(yvalues)
 
-        delta_lambdas = []
-        for i in range(1, len(lambdas)):
-            delta = lambdas[i] - lambdas[i-1]
-            delta_lambdas.append(delta)
 
-        print('Intensities: ', intensities)
-        print('Delta Lambda: ', delta_lambdas)
-
-        if save is True:
-            np.save(self.target_dir+"{}_parameters.npy".format(filename),
-                    np.array([lambdas, intensities, delta_lambdas], dtype=object))
+        lambdas, intensities, delta_lambdas = osam.find_peak_spacings(osax, osay, window_size, width, height, distance, filename, save, self.target_dir)
 
         return lambdas, intensities, delta_lambdas
+
+    def fit_lasing_mode(self, osax, osay, peak_locations, gamma_guess, save = False):
+        '''
+        Function: Cycles through all peak locations to fit with lorentzian lineshape
+        Input:
+            osax, osay =  data to fit
+            peak_locations = locations of identified peaks
+            gamma_guess = fit guess for lorentzian width
+            save = True/False
+        Output:
+            lorentz_coeffs = optimised Lorentzian fit parameters
+            lorentz_fits = lorentzian fits
+        '''
+        indlocs = []
+        for i,j in enumerate(osax):
+            if j in peak_locations:
+                indlocs.append(i)
+        print(indlocs)
+        
+        lorentz_coeffs, lorentz_fits, linewidths = osam.fit_lasing_modes(osax, osay, indlocs, gamma_guess, save = False, target_dir = self.target_dir)
+        
+        return lorentz_coeffs, lorentz_fits, linewidths
