@@ -178,6 +178,36 @@ def xy_plot(datasets, type=None, fit = None, label_variable = None, aspect = 1.0
                 plt.scatter(datasets[0], data, color = 'grey', label = 'Data')
                 xfit = np.linspace(min(datasets[0]), max(datasets[0]), len(fit[i]))
                 plt.plot(xfit, fit[i], color = 'tab:blue', label = 'Fit')
+
+    elif type == 'beat_timelines':
+        fig, ax = plt.subplots(figsize = (9,9 * aspect))
+    
+    
+        ax.tick_params(which = 'major', labelsize = 18, direction = 'in', length = 15, width = 1, bottom = True, top = True, left = True, right = True)
+        ax.tick_params(which = 'minor', labelsize = 0, direction = 'in', length = 7, width = 1, bottom = True, top = True, left = True, right = True)
+    
+        ax.xaxis.set_minor_locator(AutoMinorLocator(2))
+        ax.yaxis.set_minor_locator(AutoMinorLocator(2))
+    
+        ax.xaxis.set_major_formatter(FormatStrFormatter('%.0f'))
+        # ax.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
+    
+        ax.set_xlabel(x_label,fontsize=18,labelpad = 15)
+        ax.set_ylabel(y_label,fontsize=18,labelpad = 15)
+    
+        
+        for i, data in enumerate(datasets):
+            if fit is None and label_variable is None:
+                plt.scatter(data[0], data[1], label = None, marker='.')
+                # plt.ylim(0,25)
+            elif fit is None:
+                plt.scatter(data[0], data[1], label = label_variable[i], marker='.')
+                # plt.ylim(0,35)
+        
+            else:
+                plt.scatter(data[0], data[1], color = 'grey', label = 'Data')
+                xfit = np.linspace(min(datasets[0]), max(datasets[0]), len(fit[i]))
+                plt.plot(xfit, fit[i], color = 'tab:blue', label = 'Fit')
     
     elif type == 'model_efficiency':
         fig, ax = plt.subplots(figsize = (9,9 * aspect))
@@ -379,29 +409,6 @@ def peak_finder(datax, data, minfit = False, threshold=None, width=None, height=
 
 
 
-def odrfit(function, x, y,initials, xerr = None, yerr = None, param_mask = None,plot=False):
-
-    model = odr.Model(function)
-    inputdata = odr.RealData(x, y, sx = xerr, sy = yerr)
-
-    odr_setup = odr.ODR(inputdata, model, beta0 = initials, ifixb = param_mask, sstol = 10e-3)
-    odr_setup.set_job(fit_type=2, deriv=1)
-
-    print('\nRunning fit!')
-    output = odr_setup.run()
-    print('\nFit done!')
-
-    print('\nFitted parameters = ', output.beta)
-    print('\nError of parameters =', output.sd_beta)
-
-    if plot is True:
-        plt.plot(x, function(output.beta, x))
-        plt.plot(x, y)
-        plt.show()
-
-    return output.beta, output.sd_beta
-
-
 
 def fwhm(x):
     mx = max(x)+min(x)
@@ -415,20 +422,11 @@ def get_diff(y):
     return dy
 
 def cross_correlation(a, b):
-    # a = a[~np.isnan(a)]
-    # b = b[~np.isnan(b)]
-    
     a = a[~np.isnan(a)]
     b = b[~np.isnan(b)]
     print(a)
     
-    # a = (a - np.mean(a)) / (np.std(a) * len(a))
-    # b = (b - np.mean(b)) / (np.std(b))  
     c = np.correlate(np.ma.array(a, mask=np.isnan(a)), np.ma.array(b,mask = np.isnan(b)),'full') 
-
-    # a = (a - np.mean(a)) / (np.std(a) * len(a))
-    # b = (b - np.mean(b)) / (np.std(b))  
-    # c = np.correlate(a, b, 'full')
     return c
 
 
