@@ -7,13 +7,18 @@ Created on Wed Jan 10 13:55:22 2024
 """
 import numpy as np
 import matplotlib.pyplot as plt
-import os
-import matplotlib.cm as cm
 from scipy.optimize import curve_fit
+from scipy.stats import poisson
+from scipy.optimize import minimize
+from scipy import stats
 
 import tools as tools
 
-'''RESONANCE METHODS'''
+'''
+RESONANCE METHODS
+
+Mid-level functions called on by ResonancePipeline
+'''
 
 
 def background_correction(x, y, window_size):
@@ -108,16 +113,17 @@ def select_higher_beatnotes(x, frequencies, beatnote_index, sigma, target_dir):
 def convolve(datax, datay, type, interval, avg, filter_len = 20, save = False, target_dir = None):
     if type == 'steps':
         steps = np.hstack([np.ones(filter_len), -1*np.ones(filter_len)])
+        convolution = np.convolve(datay, steps, mode='valid')
     if type == 'spikes':
-        spikes = np.hstack([ np.zeros(filter_len), 1, np.zeros(filter_len-1)])
+        spikes = np.hstack([ np.zeros(filter_len), 1, -1, np.zeros(filter_len-2)])
+        convolution = np.convolve(datay, spikes, mode='valid')
     
-    convolution = np.convolve(datay, spikes, mode='valid')
     globalMinIndex = np.argmin(convolution)+filter_len-1
     
     datay += avg
     
     fig, ax = plt.subplots()
-    ax.set_xlabel('Time (s)')
+    ax.set_xlabel('Indices')
     ax.set_ylabel(r'$\lambda$ (nm)')
     ax.plot(datax, datay, color = 'grey', linewidth = 0.5, label = 'data')
     ax.legend(loc = 'upper left')
@@ -138,7 +144,7 @@ def convolve(datax, datay, type, interval, avg, filter_len = 20, save = False, t
     plt.show()
     return convolution
 
-def double_convolution_plot(x1, y1, y2, interval, steps_indices, steps, save = False, target_dir = None):
+def double_convolution_plot(x1, y1, y2, interval, signal_indices, signal_heights, save = False, target_dir = None):
     fig, ax = plt.subplots()        
     # ax = plt.gca()
     ax.set_xlabel('Time (s)')
@@ -150,11 +156,11 @@ def double_convolution_plot(x1, y1, y2, interval, steps_indices, steps, save = F
     ax2.set_ylabel('Convolution', color='tab:blue')
     ax2.tick_params(axis='y', labelcolor='tab:blue')
     x = list(np.linspace(min(x1), max(x1), len(y2)))
-    if steps and steps_indices is not None:
-        ax2.scatter(x[steps_indices[0] - interval[0]], steps[0]/10, marker = '.', color = 'tab:orange', label = 'steps')
-        for j, step_indxs in enumerate(steps_indices):
+    if signal_heights and signal_indices is not None:
+        ax2.scatter(x[signal_indices[0] - interval[0]], signal_heights[0]/10, marker = '.', color = 'tab:orange', label = 'signal')
+        for j, step_indxs in enumerate(signal_indices):
             # ax2.plot((x[step_indxs - interval[0]], x[step_indxs - interval[0]]), (steps[j]/10, 0), color = 'tab:orange')
-            ax2.scatter(x[step_indxs - interval[0]], steps[j]/10, marker = '.', color = 'tab:orange')
+            ax2.scatter(x[step_indxs - interval[0]], signal_heights[j]/10, marker = '.', color = 'tab:orange')
     # ax2.plot(range(filter_len-1, len(datay)-filter_len),convolution/10, c="tab:blue", alpha=0.5, label = 'convolution')
     ax2.plot(x, y2/10, c="tab:blue", alpha=1, label = 'convolution')
     ax2.legend(loc='upper center')
@@ -166,14 +172,14 @@ def double_convolution_plot(x1, y1, y2, interval, steps_indices, steps, save = F
         plt.savefig(target_dir+str(title.replace(" ", "_"))+str(interval)+"_plot.png", bbox_inches='tight',pad_inches=0.0, format = 'png', dpi=1200)
     plt.show()
 
-def signal_finder(interval, time, datay, type, window_size, minfit = True, distance = 50, width = 25, height = None, dev = 1, plot = True, target_dir = None):
+def signal_finder(interval, time, datay, type, window_size, minfit = True, distance = None, width = None, height = None, dev = 3, plot = True, target_dir = None):
     
     maximas = []
     minimas = []
-    steps_indices = []
-    steps_excluded = []
+    signal_indices = []
+    signal_heights = []
+    signal_excluded = []
     convolutions = []
-    delta_lambda = []
     
     window_no = int(len(datay) / window_size)
     print(window_no,' windows to sample')
@@ -181,7 +187,6 @@ def signal_finder(interval, time, datay, type, window_size, minfit = True, dista
     datax = np.linspace(interval[0], interval[1], len(datay))
     
     dary_total = []
-    steps = []
     
     avg = np.average(datay)
     datayy = datay - avg
@@ -203,7 +208,7 @@ def signal_finder(interval, time, datay, type, window_size, minfit = True, dista
         
 
         if plot is True:
-            double_convolution_plot(windowx, window, np.array(convolution)/10, interval, steps_indices = None, steps = None, save = False, target_dir = target_dir)
+            double_convolution_plot(windowx, window, np.array(convolution)/10, interval, signal_indices = None, signal_heights = None, save = False, target_dir = target_dir)
 
     convolutions -= np.nanmean(convolutions)
     sigma_step = np.std(convolutions)
@@ -213,18 +218,96 @@ def signal_finder(interval, time, datay, type, window_size, minfit = True, dista
     maximas = [int(datax[m]) for m in maxima]
     minimas = [int(datax[m]) for m in minima]
 
-    steps_indices = [*maximas, *minimas]
-    xstep_indices = [*maxima, *minima]
-    print(len(steps_indices), steps_indices)
-    print(len(xstep_indices), xstep_indices)
+    signal_indices = [*maximas, *minimas]
+    xsignal_indices = [*maxima, *minima]
+    print(len(signal_indices), signal_indices)
+    print(len(xsignal_indices), xsignal_indices)
     print(len(convolutions))
     
-    steps = [convolutions[xs]/10 for xs in xstep_indices]
-    steps_excluded = [d/10 for d in convolutions if d not in maxima and d not in minima]
-    print(len(steps), steps)
+    signal_heights = [convolutions[xs]/10 for xs in xsignal_indices]
+    signal_excluded = [d/10 for d in convolutions if d not in maxima and d not in minima]
+    print(len(signal_heights), signal_heights)
     
-    double_convolution_plot(time, datay, np.array(convolutions)/10, interval, steps_indices, steps, save = True, target_dir = target_dir)
+    double_convolution_plot(time, datay, np.array(convolutions)/10, interval, signal_indices, signal_heights, save = True, target_dir = target_dir)
 
-    np.save(target_dir+str(type)+"_resonance_parameters.npy", np.array([maximas, minimas, steps_indices, steps, steps_excluded, delta_lambda, convolutions], dtype = object))
+    np.save(target_dir+str(type)+"_resonance_parameters.npy", np.array([maximas, minimas, signal_indices, signal_heights, signal_excluded, convolutions], dtype = object))
 
-    return maximas, minimas, steps_indices, steps, steps_excluded, delta_lambda, convolutions
+    return maximas, minimas, signal_indices, signal_heights, signal_excluded, convolutions
+
+def single_gaussian_fit(data, ind, save = False, target_dir = None):
+    y,x,_= plt.hist(data, bins = 20, label='Data', color = 'lightgrey')
+    x=(x[1:]+x[:-1])/2
+    plt.show()
+
+    mean1 = np.nanmean(x[ind:])
+    sigma1 = np.nanstd(x[ind:])
+    A1 = max(y[ind:])
+
+    expected = (mean1, sigma1, A1)
+    print('Expected: ', expected)
+        
+    try:
+        params, cov = curve_fit(gauss, x, y, expected)
+        print('Fit parameters = ', params)
+
+        x_fit = np.linspace(-np.abs(x).max(), np.abs(x).max(), 500)
+        gaussian = gauss(x_fit, *params[:3])
+        
+        plt.plot(x_fit, gaussian, color='tab:blue', lw=1, ls="--", label=r'Fit 1: $\mu ={},\sigma ={}$'.format(round(params[0], 7),round(params[1],8)))
+        
+        plt.xlim(min(x), max(x))
+        plt.ylim(0, max(y)+1)
+        plt.hist(data, bins = len(data), label='Data', color = 'lightgrey')
+        plt.legend()
+        plt.title('Single Gaussian Fit')
+        plt.ylabel('n')
+        plt.xlabel(r'$\Delta \lambda$ (nm)')
+        if save is True:
+            plt.savefig(target_dir+'single_gaussian_fit.png', dpi=1200)
+        plt.show() 
+
+    except RuntimeError:
+        params = None
+        gaussian = None
+        print("Error - curve_fit failed")
+
+    return params, gaussian
+
+def get_counts(step_indices, steps, window, window_no):
+    counts = []
+    for f in range(window_no):
+        selected = []
+        for i, ind in enumerate(step_indices):
+            # if ind in indeces:
+            if ind > 0 + window*f and ind < window + window*f:
+                print(i)
+                selected.append(steps[i])
+        
+        c = len(selected)
+        print(c, ' counts detected in window')
+        counts.append(c)
+    return counts
+
+def poisson_fit_histogram(data):
+    entries, bin_edges, patches = plt.hist(data, bins=max(data)*2, density=True, label='Data')
+    
+    result = minimize(negative_log_likelihood, x0=np.ones(1), args=(data,), method='Powell')
+    
+    print(result)
+    
+    x_plot = np.arange(0, max(data))
+    
+    fit = stats.poisson.pmf(x_plot, result.x)
+    plt.plot(x_plot, fit, label=r'Poisson fit, $\mu$='+str(result.x[0]), color = 'black', linestyle = '--')
+    plt.legend()
+    plt.title('Histogram: Poisson Fit')
+    plt.show()
+    
+    return fit
+
+def gauss(x, mu, sigma, A):
+    return A*np.exp(-(x-mu)**2/2/sigma**2)
+
+def negative_log_likelihood(params, data):
+    ''' better alternative using scipy '''
+    return -stats.poisson.logpmf(data, params[0]).sum()
