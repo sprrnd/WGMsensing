@@ -9,27 +9,43 @@ Created on Wed Jan 10 12:50:47 2024
 
 
 import matplotlib.pyplot as plt
-import os
-from natsort import natsorted
 import numpy as np
-import pandas as pd
-import scipy
-from scipy import stats
-from scipy import signal
-from scipy.signal import correlate
 
 import tools as tools
 import classifier as classify
-import fitting as fit
+import ResonanceMethods as rem
+
+
+'''
+RESONANCE PIPELINE
+
+Data analysis pipeline for ResonanceWorkbook
+Parent class calling on ResonanceMethods functions
+'''
 
 class ResonancePipeline():
     
     def __init__(self, directory, folder, target_dir):
+        '''
+        Function: Initiates class by defining input and output directories
+        Input:
+            directory =  general folder where data is stored ('data/)
+            folder = specific folder to load data from, usually date ('2024-')
+            target_dir = output folder to save files, ('output/'+date)
+        '''
         self.directory = directory
         self.folder = folder
         self.target_dir = target_dir
         
     def load_data(self, type='mat', mac = True):
+        '''
+        Function: Loads all data in folder corresponding to set data type
+        Input:
+            type = 'mat'/'csv/'txt
+            mac = True/False
+        Output:
+            data_dictionary = stores all data under associated filenames
+        '''
         if type == 'mat':
             self.data_folder = classify.load_mat_file(self.directory+self.folder+'/', mac=mac)
             self.data_dictionary = classify.process_dict(self.data_folder)
@@ -39,10 +55,23 @@ class ResonancePipeline():
             self.data_dictionary = classify.load_txt_file(self.directory+self.folder+'/', skiprows=14, mac=mac)
             
     def plot_data(self, x, y):
-
-        tools.xy_plot([x, y], fit = None, label_variable = None, aspect = 0.5, yerror = None, x_label = 'Frequency (MHz)', y_label = 'Intensity (dB)', title = 'Frame {}'.format(str(index)), box = False, save = False, target_dir = self.target_dir)
+        '''
+        Function: Simple x,y plot
+        Input:
+            x, y
+        Output:
+            single data plot
+        '''
+        tools.xy_plot([x, y], fit = None, label_variable = None, aspect = 0.5, yerror = None, x_label = None, y_label = None, title = None, box = False, save = False, target_dir = self.target_dir)
 
     def classify_data(self, datafile):
+        '''
+        Function: Classify data in dictionary as 'time', 'resonance', and 'fwhm
+        Input:
+            datafile = specific dataset to calssify
+        Output:
+            data_parameters = dictionary with classified data
+        '''
         self.data_parameters = {}
         
         self.data_parameters['time'] = datafile[:, 0]
@@ -55,6 +84,15 @@ class ResonancePipeline():
         return self.data_parameters
     
     def remove_errors(self, x, y_name, error_range):
+        '''
+        Function: Replaces data with nan in given error range
+        Input:
+            x = time
+            y_name = specifies which data type in data_parameters dictionary to correct
+            error_range = range of indices to remove, as list [inde1, index2]
+        Output:
+            y_corr = data with errors removed
+        '''
         y = self.data_parameters[str(y_name)]
         
         y_corr=[]
@@ -71,6 +109,14 @@ class ResonancePipeline():
         return y_corr
     
     def correct_background(self, data_parameter, window_size):
+        '''
+        Function: Finds average moving background level and subtracts from data within given window
+        Input:
+            data_parameter = string corresponding to data in data_parameters dictionary
+            window_size = over which to calculate average background, adjust for best results
+        Output:
+            y_corr = background corrected data
+        '''
         x = self.data_parameters['time']
         y = self.data_parameters[str(data_parameter)]
         
@@ -87,108 +133,174 @@ class ResonancePipeline():
         return y_corr
 
     
-    def find_signal(self, x, y, type, interval, window_size):
+    def find_signal(self, x, y, type, interval, window_size, dev, distance, width):
+        '''
+        Function: Convolves data with step/spike kernel to identify step/spike locations and heights
+        Input:
+            x, y = data to analyse
+            type = 'steps'/'spikes', which signal type to look for
+            interval = domain of data to analyse
+            window_size = size of domain over which to apply convolution
+            dev = minimum number of standard deviations for picking up signal event heights
+            distance = minimum separation between neighbouring signal events
+            width = minimum signal duration
+        Output:
+            maxima, minima, signal_indices, signal_heights, signal_excluded, convolutions = result of convolution
+        '''
         datax = x[interval[0] : interval[1]]
         datay = y[interval[0] : interval[1]]
 
-        #if type == 'steps':
-         #   maxima, minima, step_indices, steps, steps_excluded, delta_lambda, convolutions = fit.step_finder3(interval, datax, datay, window_size = window_size, type = 'step', minfit = True, distance = 50, width = 20, height = None, dev = 3, plot = True, target_dir = self.target_dir)
-        #if type == 'spikes':
-         #   maxima, minima, step_indices, steps, steps_excluded, delta_lambda, convolutions = fit.spike_finder(interval, datax, datay, window_size = window_size, type = 'spike', minfit = True, distance = 10, width = 3, height = None, dev = 3, plot = True, target_dir = self.target_dir)
+        maxima, minima, signal_indices, signal_heights, signal_excluded, convolutions = rem.signal_finder(interval, datax, datay, window_size = window_size, type = type, minfit = True, distance = distance, width = width, height = None, dev = dev, plot = True, target_dir = self.target_dir)
         
-        maxima, minima, step_indices, steps, steps_excluded, delta_lambda, convolutions = rem.signal_finder(interval, datax, datay, window_size = window_size, type = type, minfit = True, distance = 10, width = 3, height = None, dev = 3, plot = True, target_dir = self.target_dir)
-        
-    def load_signal_parameters(self, filename):
-        #if mac is True:
-         #   filenames =classify.mac_natsorted(os.listdir(self.target_dir))
-        #else:
-         #   filenames = os.listdir(self.target_dir)
-        #filenames = [f for f in filenames if 'fit_parameters' in f and '._' not in f]
-        #print('Fit parameters available to load: ', filenames)
-        
+    def load_signal_parameters(self, filename, type):
+        '''
+        Function: Loads signal convolution parameters in filename
+        Input:
+            filename = name of file to load
+            type = 'steps'/'spikes', which signal type to look for
+        Output:
+            maxima, minima, signal_indices, signal_heights, signal_excluded, convolutions = result of convolution
+        '''
         self.signal_parameters = {}
                        
-        maxima, minima, step_indices, steps, steps_excluded, delta_lambda, convolutions = np.load(self.target_dir+filename, allow_pickle=True)
+        maxima, minima, signal_indices, signal_heights, signal_excluded, convolutions = np.load(self.target_dir+filename, allow_pickle=True)
 
         self.signal_parameters['maxima'] = maxima
         self.signal_parameters['minima'] = minima
-        self.signal_parameters['step_indices'] = step_indices
-        self.signal_parameters['steps'] = steps
-        self.signal_parameters['steps_excluded'] = steps_excluded
-        self.signal_parameters['delta_lambda'] = delta_lambda
+        self.signal_parameters[str(type)+'_indices'] = signal_indices
+        self.signal_parameters[str(type)] = signal_heights
+        self.signal_parameters[str(type)+'_excluded'] = signal_excluded
         self.signal_parameters['convolutions'] = convolutions
                      
-                       
-    def load_fit_parameters(self):
-        filenames =classify.mac_natsorted(os.listdir(self.target_dir))
-        filenames = [f for f in filenames if 'fit_parameters' in f and '._' not in f]
-        print('Fit parameters available to load: ', filenames)
-        
-        fit_params = {}
-        for f in filenames:
-            fit_params[f] = np.load(self.target_dir+f, allow_pickle=True)
-        return fit_params
     
-    def plot_timelines(self, fit_params, variable_type=None):
+    def dev_selection(self, i, y, stype = 'both', dev = 3, plot = True):
         '''
-        Plot list variable y against single array x
+        Function: Filters data above and below sigma standard deviations
+        Input:
+            i, y = data to filter
+            stype = 'both'/'positive'/'negative'
+            sigma = threshold number of standard deviations
+        Output:
+            data_filtered = filtered data
+        '''    
+        std = np.nanstd(y)
+        mu = np.nanmean(y)
+        h_lim = float(std) * dev
+        
+        iselected = []
+        selected = []
+        for m, n in zip(i, y):
+            if stype == 'both':
+                if n >= h_lim or n <= - h_lim:
+                    selected.append(n)
+                    iselected.append(m)
+            elif stype == 'positive':
+                if n >= h_lim:
+                    selected.append(n)
+                    iselected.append(m)
+            elif stype == 'negative':
+                if n <= - h_lim:
+                    selected.append(n)
+                    iselected.append(m)
+                    
+        if plot is True:
+            tools.xy_plot([[i, y], [iselected, selected]], type='beat_timelines', label_variable = ['total steps', r'filtered steps {}$\sigma$'.format(dev)], aspect = 0.5, yerror = None, x_label = 'Index', y_label = r'$\Delta \lambda$ (nm)', title = 'Data Filter {} sigma'.format(dev), box = False, save = True, target_dir = self.target_dir)
+        return iselected, selected
+
+    def fit_histogram(self, hist_data, plot=False):
         '''
-        self.frames, self.amplitudes, self.frequencies, self.widths, self.fits = fit_params
-        
-        x = self.frames
-        frame_no = len(self.frames)
-        beat_no = len(self.frequencies)
-        
-        if variable_type == 'frequency':
-            frequencies_mhz = [list(np.array(i)*10**-6) for i in self.frequencies]
-            tools.xy_plot( [x, frequencies_mhz], type='beat_timeline', label_variable = ['Beatnote '+str(i+1) for i in range(beat_no)], aspect = 0.5, yerror = None, x_label = 'Frame', y_label = 'Beat Frequency (MHz)', title = 'Beatnote Frequency over {} frames'.format(str(frame_no)), box = False, save = True, target_dir = self.target_dir)
-        if variable_type == 'amplitude':
-            tools.xy_plot( [x, self.amplitudes], type='beat_timeline', label_variable = ['Beatnote '+str(i+1) for i in range(beat_no)], aspect = 0.5, yerror = None, x_label = 'Frame', y_label = 'Amplitude (dB)', title = 'Beatnote Amplitude over {} frames'.format(str(frame_no)), box = False, save = True, target_dir = self.target_dir)
-        if variable_type == 'width':
-            widths_mhz = [list(np.array(i)*10**-6) for i in self.widths]
-            tools.xy_plot( [x, self.widths], type='beat_timeline', label_variable = ['Beatnote '+str(i+1) for i in range(beat_no)], aspect = 0.5, yerror = None, x_label = 'Frame', y_label = 'Width (MHz)', title = 'Beatnote Width over {} frames'.format(str(frame_no)), box = False, save = True, target_dir = self.target_dir)
-        if variable_type == None:
-            frequencies_mhz = [list(np.array(i)*10**-6) for i in self.frequencies]
-            widths_mhz = [list(np.array(i)*10**-6) for i in self.widths]
-            tools.xy_plot( [x, frequencies_mhz], type='beat_timeline', label_variable = ['Beatnote '+str(i+1) for i in range(beat_no)], aspect = 0.5, yerror = None, x_label = 'Frame', y_label = 'Beat Frequency (MHz)', title = 'Beatnote Frequency over {} frames'.format(str(frame_no)), box = False, save = True, target_dir = self.target_dir)            
-            tools.xy_plot( [x, self.amplitudes], type='beat_timeline', label_variable = ['Beatnote '+str(i+1) for i in range(beat_no)], aspect = 0.5, yerror = None, x_label = 'Frame', y_label = 'Amplitude (dB)', title = 'Beatnote Amplitude over {} frames'.format(str(frame_no)), box = False, save = True, target_dir = self.target_dir)
-            tools.xy_plot( [x, self.widths_mhz], type='beat_timeline', label_variable = ['Beatnote '+str(i+1) for i in range(beat_no)], aspect = 0.5, yerror = None, x_label = 'Frame', y_label = 'Width (MHz)', title = 'Beatnote Width over {} frames'.format(str(frame_no)), box = False, save = True, target_dir = self.target_dir)
+        Function: Fits histogram to data
+        Input:
+            his_data = data to fit
+            stype = 'both'/'positive'/'negative'
+            sigma = threshold number of standard deviations
+        Output:
+            data_filtered = filtered data
+        ''' 
+        hist_data_nan = [h for h in hist_data if str(h) != 'nan']
+        hist = hist_data_nan
+
+        x = np.linspace(min(hist), max(hist), 1000)
+
+        mu, std = norm.fit(hist)
+        p = norm.pdf(x, mu, std)
+        h_bins = 100
+        a = max(p)
 
         
-    def filter_outliers(self, data, sigma = 3):
-        
-        self.data_filtered = rem.filter_outliers(data, sigma)
-        tools.xy_plot( self.data_filtered, type='beat_timeline', label_variable = ['Beatnote '+str(i+1) for i in range(len(data))], aspect = 0.5, yerror = None, x_label = 'Frame', y_label = 'Filtered Variable', title = 'Filtered Beatnote Variable', box = False, save = True, target_dir = self.target_dir)
-        
-        #self.amplitudes_filtered = fit.filter_outliers(self.amplitudes, sigma)
-        #tools.xy_plot( self.amplitudes_filtered, type='beat_timeline', label_variable = ['Beatnote '+str(i+1) for i in range(len(self.amplitudes))], aspect = 0.5, yerror = None, x_label = 'Frame', y_label = 'Amplitude (dB)', title = 'Filtered Beatnote Amplitudes over {} frames'.format(str(len(self.t))), box = False, save = True, target_dir = self.target_dir)
-    
-        #self.widths_filtered = fit.filter_outliers(self.widths, sigma)
-        #tools.xy_plot( self.widths_filtered, type='beat_timeline', label_variable = ['Beatnote '+str(i+1) for i in range(len(self.widths))], aspect = 0.5, yerror = None, x_label = 'Frame', y_label = 'Width (MHz)', title = 'Filtered Beatnote Widths over {} frames'.format(str(len(self.t))), box = False, save = True, target_dir = self.target_dir)
-        
-        return self.data_filtered
-        
-        
-    def get_beatnote_stats(self, x, beatnote_frequencies, beatnote_index=None, sigma=3, n_bins=30):
-        '''
-        Beat Note Selection
-            - Derivative of each beat note frequency over time
-            - Select high-order beat notes with derivate > threshold
-        '''
-        # tools.xy_plot(select_data, type='beat_timeline', label_variable = ['Beatnote '+str(i+1) for i in range(len(self.frequencies))], aspect = 0.33, yerror = None, x_label = 'Frame', y_label = 'Frequency (MHz)', title = 'Beatnote Frequencies over {} frames'.format(str(len(self.t))), box = False, save = True, target_dir = self.target_dir)
-        self.selected_times, self.selected_beats = rem.select_higher_beatnotes(x, beatnote_frequencies, beatnote_index, sigma, self.target_dir)
-        
-        '''
-        1D Histogram
-            - Using beat note difference (derivative)
-            - of Selected beat notes above threshold
-        '''
-        self.n_bins = n_bins
-        
-        if beatnote_index is None:
-            for h, hist_data in enumerate(self.selected_beats):
-                tools.xy_plot([hist_data,n_bins], type = 'histogram', aspect = 1.0, yerror = None, x_label = r'Beat Step $\Delta \nu$ (MHz)', y_label = 'n', title = '1D Histogram for Beatnote {}'.format(str(h+1)), box = False, save = True, target_dir = self.target_dir)
-        else:
-            tools.xy_plot([self.selected_beats, n_bins], type = 'histogram', aspect = 1.0, yerror = None, x_label = r'Beat Step $\Delta \nu$ (MHz)', y_label = 'n', title = '1D Histogram for Beatnote {}'.format(str(beatnote_index)), box = False, save = True, target_dir = self.target_dir)
+        if plot is True:
+            tools.xy_plot([hist, h_bins], type = 'histogram', fit=[x, p], label_variable = r'$\mu=$ {}, $\sigma=$ {}'.format(round(mu,7), round(std,8)), aspect = 0.8, yerror = None, x_label = r'Step $\Delta \lambda$ (nm)', y_label = 'n', title = '1D Histogram: Normal Fit', box = False, save = True, target_dir = self.target_dir)
+        return mu, std, a
 
-        self.hist_data = self.selected_beats
+    def fit_gaussian(self, hist_data, ind, save = False):
+        '''
+        Function: Fits gaussian function to data
+        Input:
+            his_data = data to fit
+        Output:
+            fit_params, single_gaussian = gaussian fit output
+        ''' 
+        fit_params, single_gaussian = rem.single_gaussian_fit(hist_data, ind = 0, save = True, target_dir = self.target_dir)
+        
+        return fit_params, single_gaussian
+    
+        
+    def get_stats(self, x, y, n_bins = None, split = True, abso = True):
+        '''
+        Function: Plot histograms
+        Input:
+            x, y = data to plot
+            n_bins = number of histogram bins
+            split = plot negative and positive shifts
+            abso = plot combined absolute values for positive and negative shifts
+        Output:
+            histogram plots
+        ''' 
+        
+        self.hist_data = y
+        
+        if n_bins is None:
+            n_bins = len(self.hist_data)
+        tools.xy_plot([self.hist_data,n_bins], type = 'histogram', aspect = 1.0, yerror = None, x_label = r'Step $\Delta \lambda$ (nm)', y_label = 'n', title = '1D Histogram', box = False, save = True, target_dir = self.target_dir)
+        
+        if split is True:
+            self.hist_data_pos = [h for h in self.hist_data if h>0]
+            self.hist_data_neg = [h for h in self.hist_data if h<0]
+            
+            n_bins1 = len(self.hist_data_pos)
+            tools.xy_plot([self.hist_data_pos,n_bins1], type = 'histogram', aspect = 1.0, yerror = None, x_label = r'Step $\Delta \lambda$ (nm)', y_label = 'n', title = '1D Histogram: Positive Values', box = False, save = True, target_dir = self.target_dir)
+             
+            n_bins2 = len(self.hist_data_neg)
+            tools.xy_plot([self.hist_data_neg,n_bins2], type = 'histogram', aspect = 1.0, yerror = None, x_label = r'Step $\Delta \lambda$ (nm)', y_label = 'n', title = '1D Histogram: Negative Values', box = False, save = True, target_dir = self.target_dir)
+        
+        if abso is True:
+            self.hist_data_abs = [np.abs(h) for h in self.hist_data]
+            tools.xy_plot([self.hist_data_abs, n_bins], type = 'histogram', aspect = 1.0, yerror = None, x_label = r'Step $\Delta \lambda$ (nm)', y_label = 'n', title = '1D Histogram: Absolute Values', box = False, save = True, target_dir = self.target_dir)
+   
+    def get_temporal_stats(self, y, step_indices, steps, window, h_bins = None, fit_poisson = False):
+        '''
+        Function: Counts number of detected signal events in given window, plots in histogram and fits poisson distribution
+        Input:
+            y = wavelengths
+            step_indices = locations of steps/spikes
+            steps = step/spike heights
+            window = over which to count number of signal events
+            h_bins = number of histogram bins
+            fit_poisson = True/False, fits poisson distribution to histogram counts data
+        Output:
+            counts = number of signal events in each window
+            poisson_fit = fitted poisson distribution
+        ''' 
+        window_no = int(len(y)/window)
+        counts = rem.get_counts(step_indices, steps, window, window_no)
+
+        if h_bins is None:
+            h_bins = len(counts)
+        tools.xy_plot([counts, h_bins], type = 'histogram', fit=None, label_variable = None, aspect = 0.8, yerror = None, x_label = 'Detection Counts', y_label = 'n', title = 'Counts Histogram over time', box = False, save = True, target_dir = self.target_dir)
+        
+        print('Counts list across {} windows of size {}:'.format(window_no, window))
+
+        if fit_poisson is True:
+            poisson_fit = rem.poisson_fit_histogram(counts)
+
+        return counts, poisson_fit
