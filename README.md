@@ -1,4 +1,4 @@
-# WGM_analysis = Main data analysis branch
+# master = Main data analysis branch
 
 ## How is the WGM_analysis branch organised?
 
