@@ -1,6 +1,6 @@
-WGM_analysis = Main data analysis branch
+#WGM_analysis = Main data analysis branch
 
-How is the WGM_analysis branch organised?
+##How is the WGM_analysis branch organised?
 
 - HelperFunctions:
   Python files containing general functions shared and used by various Pipelines
@@ -27,7 +27,7 @@ How is the WGM_analysis branch organised?
     - OSAPipeline.py
     - OSAMethods.py
  
-How are the Pipelines folders organised?
+##How are the Pipelines folders organised?
 
 In each of those last three Pipelines folders, you will find three files:
 
@@ -44,7 +44,7 @@ In each of those last three Pipelines folders, you will find three files:
   - a python file which contains all the relevant functions called on by _Pipeline.py
   - most of the processing is done here so if there is an error somewhere, this is probably the first place to check
 
-How to structure the data analysis folder?
+##How to structure the data analysis folder?
 
 The code is defined to follow the following input and ouput structure,
     Workbook.ipynb
