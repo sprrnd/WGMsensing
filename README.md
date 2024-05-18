@@ -1,6 +1,6 @@
 # master = Main data analysis branch
 
-## How is the master branch organised?
+## Master branch organisation
 
 - HelperFunctions:
   Python files containing general functions shared and used by various Pipelines
@@ -28,7 +28,7 @@ These need to be included alongside a particular Pipeline in order to load in th
     - OSAPipeline.py
     - OSAMethods.py
  
-## How are the Pipelines folders organised?
+## Pipeline folders organisation
 
 In each of those last three Pipelines folders, you will find three files:
 
@@ -45,7 +45,7 @@ In each of those last three Pipelines folders, you will find three files:
   - a python file which contains all the relevant functions called on by _Pipeline.py
   - most of the processing is done here so if there is an error somewhere, this is probably the first place to check
 
-## How to structure the data analysis folder?
+## Data analysis folder structure
 
 The code is defined to follow the following input and ouput structure,
     Workbook.ipynb
