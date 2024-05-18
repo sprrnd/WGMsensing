@@ -7,7 +7,7 @@
 
 - PicoscopeExt = Picoscope6 interfacing and format conversion
 
-- backroom = Scripts under construction
+- Backroom = Scripts under construction
 
 ## MasterAnalysis branch organisation
 
