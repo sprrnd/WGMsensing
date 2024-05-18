@@ -1,0 +1,95 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Jan 17 12:53:21 2024
+
+@author: sabrinaperrenoud
+"""
+
+import os
+import sys
+import pandas as pd
+import scipy
+import numpy as np
+
+# picoscope /c *.psdata /f mat /b all
+
+class CrunchPipeline():
+    
+    def __init__(self, directory):
+        self.directory = directory
+        
+    def psdata_to_mat(self):
+        print('To convert .psdata file to folder of .mat files...')
+        print('Open new command prompt in same folder location of target .psdata...')
+        print('Run the following command:')
+        print('picoscope /c *.psdata /f mat /b all')
+        print('...wait until conversion complete.')
+
+    def crunch_data(self, directory):
+        
+        foldernames = os.listdir(self.directory)
+        
+        foldernames = [i for i in foldernames if os.path.isdir(self.directory+i) is True]
+    
+        print('Available folders: ',foldernames)
+        
+        for folder in foldernames:
+            target_dir = self.directory + folder
+            
+            filenames = os.listdir(target_dir+'/')
+            
+            df = scipy.io.loadmat(target_dir+ '/' + filenames[0])
+            df['{}'.format(str(0))] = df['A']
+            
+            for i in range(len(filenames)):
+                print(i,' out of ', len(filenames))
+                if i ==0:
+                    pass
+                else:
+                    dfi = scipy.io.loadmat(target_dir+'/'+filenames[i])
+                    dfi['{}'.format(str(i))] = df['A']
+                    df.update(dfi)
+            saveas='{a}'.format(a=str(folder))
+            scipy.io.savemat(directory+str(saveas)+'.mat', df)
+            
+            self.df_mat = df
+    
+    def mat_to_csv(self, directory):
+        
+        print('Here')
+        
+        filenames = os.listdir(self.directory)
+        
+        filenames = [i for i in filenames if '.mat' in i]
+    
+        print('Available folders: ',filenames)
+        
+        for file in filenames:
+            mat = scipy.io.loadmat(self.directory+file)
+            
+            start = mat['Tstart'][0][0]
+            inter =  mat['Tinterval'][0][0]/10**6
+            length = mat['Length'][0][0]
+        
+            frequencies = np.arange(start, ( inter*length), inter)
+        
+            newdf = {'Frequency':  frequencies}
+            df = pd.DataFrame(data=newdf)
+          
+            for i in range(len(mat)-10):
+                data = mat[str(i)]
+                df.insert(i+1, str(i), data)
+        
+        
+            saveas='{a}'.format(a=str(file.strip('.mat')))
+            df.to_csv(directory+str(saveas)+'.csv', index = False)
+            
+            self.df_csv = df
+            
+    
+# directory = 'data/2024-01-31/'
+
+# crunch = CrunchPipeline(directory)
+# crunch.crunch_data(directory)
+# crunch.mat_to_csv(directory)
