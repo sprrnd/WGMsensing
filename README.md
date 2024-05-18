@@ -12,5 +12,6 @@ Used to convert the picoscope .psdata file into a single .mat or .csv file
 
 ### ps5000*.py
 
+- test scipts
 - picosdk inspired scripts for interfacing with Picoscope6 software
 - Methods for data recording with continuous data saving loop to overcome full buffer and data saving time lag
