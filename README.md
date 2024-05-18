@@ -17,11 +17,11 @@ Pip install or conda install can be used to install all of these packages
 
 - PicoscopeExt = Picoscope6 interfacing and format conversion
 
-- backroom = under construction scripts
+- backroom = Scripts under construction
 
 ## Master branch organisation
 
-- HelperFunctions:
+- Helper Functions:
   Python files containing general functions shared and used by various Pipelines
     - fitting.py
     - classifier.py
