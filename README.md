@@ -5,27 +5,26 @@ master = Main data analysis branch
 
 ## Master branch organisation
 
-### - HelperFunctions:
+- HelperFunctions:
   Python files containing general functions shared and used by various Pipelines
     - fitting.py
     - classifier.py
     - tools.py
   
-    These need to be included alongside a particular Pipeline in order to load in the relevant functions
+  These need to be included alongside a particular Pipeline in order to load in the relevant functions
 
-### - BeatnotePipelines:
+- BeatnotePipelines:
   Methods and functions for the active beatnote data analysis
     - BeatnoteWorkbook.ipynb
     - BeatnotePipeline.py
     - BeatnoteMethods.py
 
-### - ResonanceShiftPipelines:
+- ResonanceShiftPipelines:
   Methods and functions for the passive resonance shift data analysis
     - ResonanceWorkbook.ipynb
     - ResonancePipeline.py
     - ResonanceMethods.py
-
-### - OSAPipelines:
+- OSAPipelines:
   Methods and functions for plotting and analysing OSA spectrum data
     - OSAWorkbook.ipynb
     - OSAPipeline.py
