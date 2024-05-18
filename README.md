@@ -11,8 +11,11 @@
 
 Pip install or conda install can be used to install all of these packages
 
-## Running the main data analysis
+## Branches Overview
+
 master = Main data analysis branch
+PicoscopeExt = Picoscope6 interfacing and format conversion
+backroom = under construction scripts
 
 ## Master branch organisation
 
