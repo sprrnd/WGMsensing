@@ -1,6 +1,6 @@
 # master = Main data analysis branch
 
-## How is the WGM_analysis branch organised?
+## How is the master branch organised?
 
 - HelperFunctions:
   Python files containing general functions shared and used by various Pipelines
