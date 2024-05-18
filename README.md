@@ -34,16 +34,16 @@ master = Main data analysis branch
 
 In each of those last three Pipelines folders, you will find three files:
 
-###     _Workbook.ipynb: 
+### _Workbook.ipynb: 
   - this is the main Jupyter notebook for analysing the data
   - parameters can be defined and changed directly in the notebook
     
-###      _Pipeline.py:
+### _Pipeline.py:
   - a python class which contains all the high-level data handling and analysis called on by the Jupyter workbook
   - calls on various functions defined in its _Methods.py counterpart
   - to be referred to for any details about functions, inputs and outputs (hopefully should not need to be tweaked)
-    
-###      _Methods.py:
+
+### _Methods.py:
   - a python file which contains all the relevant functions called on by _Pipeline.py
   - most of the processing is done here so if there is an error somewhere, this is probably the first place to check
 
