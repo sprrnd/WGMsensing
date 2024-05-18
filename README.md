@@ -11,7 +11,7 @@ master = Main data analysis branch
     - classifier.py
     - tools.py
   
-These need to be included alongside a particular Pipeline in order to load in the relevant functions
+    These need to be included alongside a particular Pipeline in order to load in the relevant functions
 
 - BeatnotePipelines:
   Methods and functions for the active beatnote data analysis
