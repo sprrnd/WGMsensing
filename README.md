@@ -1,15 +1,6 @@
 # WGMsensing
 ### Data analysis pipelines for analysing data from WGM microresonator experiments.
 
-## Main Dependencies
-- numpy
-- scipy
-- matplotlib
-- pandas
-- natsort
-
-Pip install or conda install can be used to install all of these packages
-
 ## Branches Overview
 
 - MasterAnalysis = Main data analysis branch
@@ -61,6 +52,15 @@ In each of those last three Pipelines folders, you will find three files:
 ### _Methods.py:
   - a python file which contains all the relevant functions called on by _Pipeline.py
   - most of the processing is done here so if there is an error somewhere, this is probably the first place to check
+
+## Main Dependencies
+- numpy
+- scipy
+- matplotlib
+- pandas
+- natsort
+
+Pip install or conda install can be used to install all of these packages
 
 ## File structure
 
