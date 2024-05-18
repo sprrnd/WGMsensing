@@ -20,7 +20,7 @@ Pip install or conda install can be used to install all of these packages
 
 ## Master branch organisation
 
-- Helper Functions:
+- HelperFunctions:
   Python files containing general functions shared and used by various Pipelines
     - fitting.py
     - classifier.py
