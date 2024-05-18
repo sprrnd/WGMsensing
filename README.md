@@ -1,4 +1,6 @@
-# master = Main data analysis branch
+# Data analysis pipelines for analysing data from WGM microresonator experiments.
+
+### master = Main data analysis branch
 
 ## Master branch organisation
 
