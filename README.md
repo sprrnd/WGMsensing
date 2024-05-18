@@ -7,7 +7,6 @@
 - matplotlib
 - pandas
 - natsort
-- numba
 
 Pip install or conda install can be used to install all of these packages
 
