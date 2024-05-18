@@ -10,5 +10,6 @@ Python scripts for handling Picoscope6 data collection and processing
 
 
 ### ps5000 scripts
-	- picosdk inspired scripts for interfacing with Picoscope6 software
-	- Methods for data recording with continuous data saving loop to overcome full buffer and data saving time lag
+
+- picosdk inspired scripts for interfacing with Picoscope6 software
+- Methods for data recording with continuous data saving loop to overcome full buffer and data saving time lag
