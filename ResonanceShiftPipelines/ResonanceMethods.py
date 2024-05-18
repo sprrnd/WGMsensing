@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Wed Jan 10 13:55:22 2024
 
-@author: sabrinaperrenoud
-"""
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
