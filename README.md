@@ -9,15 +9,7 @@
 
 - backroom = Scripts under construction
 
-## Master branch organisation
-
-- HelperFunctions:
-  Python files containing general functions shared and used by various Pipelines
-    - fitting.py
-    - classifier.py
-    - tools.py
-  
-  These need to be included alongside a particular Pipeline in order to load in the relevant functions
+## MasterAnalysis branch organisation
 
 - BeatnotePipelines:
   Methods and functions for the active beatnote data analysis
@@ -35,6 +27,14 @@
     - OSAWorkbook.ipynb
     - OSAPipeline.py
     - OSAMethods.py
+
+- HelperFunctions:
+  Python files containing general functions shared and used by various Pipelines
+    - fitting.py
+    - classifier.py
+    - tools.py
+  
+  These need to be included alongside a particular Pipeline in order to load in the relevant functions
  
 ## Pipeline folders organisation
 
