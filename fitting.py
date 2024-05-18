@@ -12,67 +12,6 @@ from scipy import stats
 import tools as tools
 
 
-def odrfit(function, x, y,initials, xerr = None, yerr = None, param_mask = None,plot=False):
-
-    model = odr.Model(function)
-    inputdata = odr.RealData(x, y, sx = xerr, sy = yerr)
-
-    odr_setup = odr.ODR(inputdata, model, beta0 = initials, ifixb = param_mask, sstol = 10e-3)
-    odr_setup.set_job(fit_type=2, deriv=1)
-
-    print('\nRunning fit!')
-    output = odr_setup.run()
-    print('\nFit done!')
-
-    print('\nFitted parameters = ', output.beta)
-    print('\nError of parameters =', output.sd_beta)
-
-    if plot is True:
-        plt.plot(x, function(output.beta, x))
-        plt.plot(x, y)
-        plt.show()
-
-    return output.beta, output.sd_beta
-
-def odr_lorentzian_lineshape(params, x):
-    a, x0, gam, offset = params
-    return a * gam**2 / ( gam**2 + ( x - x0 )**2) + offset
-
-def odr_auto_lorentz(xdata, ydata, x0):
-    
-    print(x0)
-    print(len(xdata))
-    print(xdata[x0])
-    offset_guess = min(ydata)
-    a_guess = max(ydata)
-    x0_guess = xdata[x0]
-    gamma_guess = np.std(ydata)
-    gamma_guess = 0.05 *10**6
-    pguess = [a_guess, x0_guess, gamma_guess, offset_guess]
-
-    
-    param_mask = np.ones(len(pguess))
-    param_mask[1] = 0
-    # param_mask[2] = 0
-    
-    popt, pcov = odrfit(odr_lorentzian_lineshape, xdata, ydata, initials = pguess, param_mask = param_mask)
-    print('Guess = ',pguess)
-    print('Optimsed Parameters = ',popt)
-    
-    output = popt
-
-    return output
-
-def odr_lorentz_func(params, x):
-    y = np.zeros_like(x)
-    for i in range(0, len(params), 4):
-        a = params[i]
-        x0 = params[i+1]
-        gam = params[i+2]
-        offset = params[i+3]
-        y = y + a * gam**2 / ( gam**2 + ( x - x0 )**2) + offset
-    return y
-
 
 def gauss(x, mu, sigma, A):
     return A*np.exp(-(x-mu)**2/2/sigma**2)
@@ -118,3 +57,56 @@ def get_local_indices(peak_indices, domain):
             chunks.append(indices)    
     
     return chunks
+    
+def odrfit(function, x, y, input, xerr = None, yerr = None, param_mask = None, plot=False):
+
+    inp = odr.RealData(x, y, sx = xerr, sy = yerr)
+    model = odr.Model(function)
+    start = odr.ODR(inp, model, beta0 = input, ifixb = param_mask, sstol = 10e-3)
+    start.set_job(fit_type=2, deriv=1)
+    func = start.run()
+    print('\nParameter fits = ', func.beta)
+    print('\nParameter errors=', func.sd_beta)
+
+    if plot is True:
+        plt.plot(x, y)
+        plt.plot(x, function(func.beta, x))
+        plt.show()
+
+    return output.beta, output.sd_beta
+def odr_lorentzian_lineshape(params, x):
+    a, x0, gam, offset = params
+    return a * gam**2 / ( gam**2 + ( x - x0 )**2) + offset
+
+def odr_auto_lorentz(xdata, ydata, x0):
+    
+    print(x0)
+    print(len(xdata))
+    print(xdata[x0])
+    offset_guess = min(ydata)
+    a_guess = max(ydata)
+    x0_guess = xdata[x0]
+    gamma_guess = np.std(ydata)
+    gamma_guess = 0.05 *10**6
+    pguess = [a_guess, x0_guess, gamma_guess, offset_guess]
+
+    param_mask = np.ones(len(pguess))
+    param_mask[1] = 0
+    # param_mask[2] = 0
+    
+    popt, pcov = odrfit(odr_lorentzian_lineshape, xdata, ydata, initials = pguess, param_mask = param_mask)
+    print('Guess = ',pguess)
+    print('Optimsed Parameters = ',popt)
+    output = popt
+
+    return output
+
+def odr_lorentz_func(params, x):
+    y = np.zeros_like(x)
+    for i in range(0, len(params), 4):
+        a = params[i]
+        x0 = params[i+1]
+        gam = params[i+2]
+        offset = params[i+3]
+        y = y + a * gam**2 / ( gam**2 + ( x - x0 )**2) + offset
+    return y
