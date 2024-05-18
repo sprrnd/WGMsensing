@@ -1,6 +1,7 @@
-# Data analysis pipelines for analysing data from WGM microresonator experiments.
+# WGMsensing
+### Data analysis pipelines for analysing data from WGM microresonator experiments.
 
-### master = Main data analysis branch
+master = Main data analysis branch
 
 ## Master branch organisation
 
